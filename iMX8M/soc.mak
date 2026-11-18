@@ -54,7 +54,8 @@ PLAT = imx8mp
 HDMI = no
 SPL_LOAD_ADDR = 0x920000
 SPL_FSPI_LOAD_ADDR = 0x920000
-TEE_LOAD_ADDR =  0x56000000
+#TEE_LOAD_ADDR =  0x56000000
+TEE_LOAD_ADDR =  0xBE000000
 ATF_LOAD_ADDR = 0x00970000
 VAL_BOARD = val
 #define the F(Q)SPI header file
@@ -97,6 +98,7 @@ u-boot-spl-ddr.bin: u-boot-spl.bin $(lpddr4_imem_1d) $(lpddr4_dmem_1d) $(lpddr4_
 	@cat lpddr4_pmu_train_2d_imem_pad.bin $(lpddr4_dmem_2d) > lpddr4_pmu_train_2d_fw.bin
 	@dd if=u-boot-spl.bin of=u-boot-spl-pad.bin bs=4 conv=sync
 	@cat u-boot-spl-pad.bin lpddr4_pmu_train_1d_fw.bin lpddr4_pmu_train_2d_fw.bin > u-boot-spl-ddr.bin
+	@echo "[INFO][ZT-IoT]: Created file of u-boot-spl-ddr.bin"
 	@rm -f u-boot-spl-pad.bin lpddr4_pmu_train_1d_fw.bin lpddr4_pmu_train_2d_fw.bin lpddr4_pmu_train_1d_imem_pad.bin lpddr4_pmu_train_1d_dmem_pad.bin lpddr4_pmu_train_2d_imem_pad.bin
 
 ddr4_imem_1d = ddr4_imem_1d$(DDR_FW_VERSION).bin
@@ -128,26 +130,37 @@ u-boot-atf.bin: u-boot.bin bl31.bin
 	@cp bl31.bin u-boot-atf.bin
 	@dd if=u-boot.bin of=u-boot-atf.bin bs=1K seek=128
 
-u-boot-atf-tee.bin: u-boot.bin bl31.bin tee.bin
+u-boot-atf-tee.bin: u-boot.bin bl31.bin fmp.bin
 	@cp bl31.bin u-boot-atf-tee.bin
-	@dd if=tee.bin of=u-boot-atf-tee.bin bs=1K seek=128
+	@dd if=fmp.bin of=u-boot-atf-tee.bin bs=1K seek=128
 	@dd if=u-boot.bin of=u-boot-atf-tee.bin bs=1M seek=1
 
 .PHONY: clean
 clean:
 	@rm -f $(MKIMG) u-boot-atf.bin u-boot-atf-tee.bin u-boot-spl-ddr.bin u-boot.itb u-boot.its u-boot-ddr3l.itb u-boot-ddr3l.its u-boot-spl-ddr3l.bin u-boot-ddr4.itb u-boot-ddr4.its u-boot-spl-ddr4.bin u-boot-ddr4-evk.itb u-boot-ivt.itb u-boot-ddr4-evk.its $(OUTIMG)
 
+# PLAT = imx8mp
 dtbs = evk.dtb
 $(dtbs):
 	./$(DTB_PREPROC) $(PLAT)-evk.dtb $(dtbs)
 
 u-boot.itb: $(dtbs)
 	./$(PAD_IMAGE) tee.bin
+	@echo "[INFO][ZT-IoT]: Padded image at tee.bin"
 	./$(PAD_IMAGE) bl31.bin
+	@echo "[INFO][ZT-IoT]: Padded image at bl31.bin"
 	./$(PAD_IMAGE) u-boot-nodtb.bin $(dtbs)
+	@echo "[INFO][ZT-IoT]: Padded image at u-boot-nodtb.bin $(dtbs)"
+	@rm -f u-boot.its
+	@echo "[INFO][ZT-IoT]: Removed file of u-boot.its"
+	@echo "[INFO][ZT-IoT]: DEK_BLOB_LOAD_ADDR=$(DEK_BLOB_LOAD_ADDR) TEE_LOAD_ADDR=$(TEE_LOAD_ADDR) ATF_LOAD_ADDR=$(ATF_LOAD_ADDR) ./mkimage_fit_atf.sh $(dtbs) > u-boot.its"
 	DEK_BLOB_LOAD_ADDR=$(DEK_BLOB_LOAD_ADDR) TEE_LOAD_ADDR=$(TEE_LOAD_ADDR) ATF_LOAD_ADDR=$(ATF_LOAD_ADDR) ./mkimage_fit_atf.sh $(dtbs) > u-boot.its
+	@echo "[INFO][ZT-IoT]: Created file of u-boot.its"
 	./mkimage_uboot -E -p 0x3000 -f u-boot.its u-boot.itb
-	@rm -f u-boot.its $(dtbs)
+	@echo "[INFO][ZT-IoT]: Created file of u-boot.itb"
+#	@rm -f u-boot.its $(dtbs)
+	@rm -f $(dtbs)
+	@echo "[INFO][ZT-IoT]: Remove file $(dtbs)"
 
 dtbs_ddr3l = valddr3l.dtb
 $(dtbs_ddr3l):
@@ -233,7 +246,9 @@ flash_ddr4_val: flash_ddr4_val_no_hdmi
 endif
 
 flash_evk_no_hdmi: $(MKIMG) u-boot-spl-ddr.bin u-boot.itb
+	@echo "[INFO][ZT-IoT]: ./mkimage_imx8 -version $(VERSION) -fit -loader u-boot-spl-ddr.bin $(SPL_LOAD_ADDR) -second_loader u-boot.itb 0x40200000 0x60000 -out $(OUTIMG)"
 	./mkimage_imx8 -version $(VERSION) -fit -loader u-boot-spl-ddr.bin $(SPL_LOAD_ADDR) -second_loader u-boot.itb 0x40200000 0x60000 -out $(OUTIMG)
+	@echo "[INFO][ZT-IoT]: Create file of ${OUTIMG}."
 
 flash_evk_no_hdmi_dual_bootloader: $(MKIMG) u-boot-spl-ddr.bin u-boot.itb
 	./mkimage_imx8 -version $(VERSION) -fit -loader u-boot-spl-ddr.bin $(SPL_LOAD_ADDR) -out $(OUTIMG)
